@@ -1,6 +1,6 @@
 {
   "name": "arthur-snake",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "JavaScript lib for Arthur's snake",
   "main": "snake.js",
   "scripts": {
