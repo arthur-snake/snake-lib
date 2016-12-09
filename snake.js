@@ -1,12 +1,12 @@
 if (typeof Emitter === "undefined") {
-	if (typeof window !== "undefined") {
-		console.log("looks like script is running in browser. check Emitter(https://github.com/ystskm/browser-emitter-js/blob/master/Emitter.js) dependency");
-	}
-	var Emitter = require("browser-emitter");
+    if (typeof window !== "undefined") {
+        console.log("looks like script is running in browser. check Emitter(https://github.com/ystskm/browser-emitter-js/blob/master/Emitter.js) dependency");
+    }
+    var Emitter = require("browser-emitter");
 }
 
 if (typeof WebSocket === "undefined") {
-	var WebSocket = require("ws");
+    var WebSocket = require("ws");
 }
 
 'use strict';
@@ -24,9 +24,10 @@ class Ids {
         if (typeof arr === "undefined") return;
         for (let i = 0; i < arr.length; i++) {
             const ii = arr[i];
-            this.ids[ii.id] = ii
+            this.ids[ii.id] = ii;
+            this.snake.emit("id.update")
         }
-        this.snake.emit("id.updated", this);
+        this.snake.emit("ids.update", this);
     };
 
     get(id) {
@@ -67,7 +68,6 @@ class Snake {
     constructor() {
         Emitter.call(this);
         this.running = false;
-        this.connection = 0;
 
         this.ids = new Ids(this);
         this.map = new SnakeMap(this, 0, 0);
@@ -83,7 +83,7 @@ class Snake {
 
     stop() {
         this.running = false;
-        if (this.ws) this.ws.close();
+        this.reconnect();
     }
 
     connectTo(server) {
@@ -92,26 +92,26 @@ class Snake {
     }
 
     reconnect() {
-        this.connection = 0;
-        if (!this.running) {
-            return false;
-        }
+        if (typeof this.ws !== "undefined") this.ws.close();
+        if (!this.running) return false;
 
         this.emit("reconnect");
 
         console.log("trying to connect to " + this.server);
+
         this.ws = new WebSocket(this.server);
+
         this.ws.onmessage = (e) => {
             const msg = JSON.parse(e.data);
             this.emit("onmessage", msg);
         };
+
         this.ws.onclose = () => {
-            this.connection = 0;
             console.log("connection closed");
             this.emit("ws.close");
         };
+
         this.ws.onopen = () => {
-            this.connection = 1;
             console.log("connection established");
             this.emit("ws.open", this.ws);
         };
@@ -130,8 +130,8 @@ class Snake {
             } else {
                 pos3 = info.length;
             }
-            obj.x = parseInt(info.slice(0, pos1)); //server.y
-            obj.y = parseInt(info.slice(pos1 + 1, pos2)); //server.x
+            obj.x = parseInt(info.slice(0, pos1)); //server.x
+            obj.y = parseInt(info.slice(pos1 + 1, pos2)); //server.y
             obj.id = info.slice(pos2 + 1, pos3);
             obj.info = this.ids.get(obj.id);
             obj.color = obj.info.color;
@@ -147,34 +147,37 @@ class Snake {
 
             this.emit("init");
         }
-        this.emit("id.update", msg.u);
         this.ids.update(msg.u);
 
         const sarr = msg.a;
-        if (typeof sarr === "undefined") return;
-
-        const arr = sarr.split("|");
-        const events = [];
-        for (let i = 0; i < arr.length; i++) {
-            events.push(parseCellInfo(arr[i]));
+        if (typeof sarr !== "undefined") {
+            const arr = sarr.split("|");
+            const events = [];
+            for (let i = 0; i < arr.length; i++) {
+                events.push(parseCellInfo(arr[i]));
+            }
+            this.map.update(events);
+            this.emit("map.update", events);
         }
-        this.map.update(events);
-        this.emit("map.update", events);
+        this.emit("server.tick");
     }
 
     join(nick) {
-        if (this.connection == 0) return;
+        if (typeof this.ws === "undefined") return;
         this.ws.send(JSON.stringify({act: "join", "nick": nick}));
+        console.log("join: " + nick);
         this.emit("join", nick);
     }
 
     leave() {
-        if (this.connection == 0) return;
+        if (typeof this.ws === "undefined") return;
         this.ws.send(JSON.stringify({act: "leave"}));
+        console.log("leave");
         this.emit("leave");
     }
 
     go(dir) {
+        if (typeof this.ws === "undefined") return;
         this.ws.send(JSON.stringify({act: "turn", "dir": dir}));
         this.emit("go", dir);
     }
@@ -182,6 +185,6 @@ class Snake {
 
 Emitter.inherits(Snake);
 
-if (module) {
-	module.exports = Snake;
+if (typeof module !== "undefined") {
+    module.exports = Snake;
 }
